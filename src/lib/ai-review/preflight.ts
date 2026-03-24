@@ -99,3 +99,4 @@ export function buildMcpEnableCommand(
 	];
 	return parts.join(' ');
 }
+
