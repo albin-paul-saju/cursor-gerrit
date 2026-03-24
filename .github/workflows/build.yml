@@ -1,38 +1,41 @@
-name: 'Format, lint and check for code errors'
+name: 'Build, lint and test'
 
 on:
     push:
         paths-ignore:
             - '**.md'
+    pull_request:
+        paths-ignore:
+            - '**.md'
     schedule:
         - cron: '0 0 1 * *'
-    create:
-        tags:
-            - '*'
 
 jobs:
     lint-and-tsc:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
-              uses: actions/checkout@v2.3.1
+              uses: actions/checkout@v4
 
             - name: Node
-              uses: actions/setup-node@v2
+              uses: actions/setup-node@v4
               with:
-                  node-version: 14
+                  node-version: 18
 
             - name: Install
-              run: yarn
+              run: npm ci
 
             - name: Format
-              run: yarn prettier --check src/
+              run: npx prettier --check src/
 
             - name: Lint
-              run: yarn lint
+              run: npm run lint
 
             - name: TypeScript
-              run: yarn compile
+              run: npm run compile
+
+            - name: Unit tests
+              run: npm test
 
             - name: Check if package was just generated
-              run: yarn generate-package && git diff --exit-code
+              run: npm run generate-package && git diff --exit-code
