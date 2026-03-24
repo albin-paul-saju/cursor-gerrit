@@ -5,59 +5,33 @@ import {
   Selection,
   Position,
   ProgressLocation,
-  ConfigurationTarget,
   ExtensionContext,
   commands as vscodeCommands,
 } from 'vscode';
+import { FileTreeView } from '../../views/activityBar/changes/changeTreeView/fileTreeView';
+import { ChangeTreeView } from '../../views/activityBar/changes/changeTreeView';
+import { showCommentsOverview } from '../../views/commentsOverview';
+import { getGerritURLFromReviewFile } from '../credentials/enterCredentials';
+import { getGitReviewFileCached } from '../credentials/gitReviewFile';
+import { GerritSecrets } from '../credentials/secrets';
+import { getAPI } from '../gerrit/gerritAPI';
+import { GerritAPIWith } from '../gerrit/gerritAPI/api';
+import { GerritChange } from '../gerrit/gerritAPI/gerritChange';
+import { gitFetchAndCheckoutChange } from '../git/git';
+import { tryExecAsync } from '../git/gitCLI';
+import { quickCheckout } from '../git/quick-checkout';
+import { writeMcpConfig, GerritCredentials } from '../mcp/mcpManager';
 import { Repository } from '../../types/vscode-extension-git';
+import { log, getOutputChannel, showOutputChannel } from '../util/log';
 import { getConfiguration } from '../vscode/config';
 import { writePromptFile } from './promptBuilder';
 import { getDefaultModel } from './modelSelector';
-import { spawn } from 'child_process';
 import {
   runPreflight,
   buildMcpEnableCommand,
   AgentCommand,
 } from './preflight';
-import {
-  writeMcpConfig,
-  GerritCredentials,
-} from '../mcp/mcpManager';
-import { tryExecAsync } from '../git/gitCLI';
-import {
-  quickCheckout,
-} from '../git/quick-checkout';
-import {
-  gitFetchAndCheckoutChange,
-} from '../git/git';
-import {
-  ChangeTreeView,
-} from '../../views/activityBar/changes/changeTreeView';
-import {
-  FileTreeView,
-} from '../../views/activityBar/changes/changeTreeView/fileTreeView';
-import {
-  GerritChange,
-} from '../gerrit/gerritAPI/gerritChange';
-import {
-  GerritAPIWith,
-} from '../gerrit/gerritAPI/api';
-import {
-  getGerritURLFromReviewFile,
-} from '../credentials/enterCredentials';
-import {
-  getGitReviewFileCached,
-} from '../credentials/gitReviewFile';
-import { GerritSecrets } from '../credentials/secrets';
-import { getAPI } from '../gerrit/gerritAPI';
-import {
-  log,
-  getOutputChannel,
-  showOutputChannel,
-} from '../util/log';
-import {
-  showCommentsOverview,
-} from '../../views/commentsOverview';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 
 type CheckoutBehavior = 'ask' | 'always' | 'never';
@@ -748,13 +722,9 @@ async function navigateToDraft(
           gerritRepo, file, null
         );
       if (diffCmd?.arguments) {
-        const cmdArgs = diffCmd.arguments as unknown;
-        if (!isUnknownArray(cmdArgs)) {
-          return;
-        }
         await vscodeCommands.executeCommand(
           diffCmd.command,
-          ...cmdArgs
+          ...(diffCmd.arguments as unknown[])
         );
         if (draft.line) {
           await new Promise((r) =>
@@ -829,7 +799,6 @@ async function showCompletionActions(
 
   const actions: string[] = [];
   if (count > 0) {
-    actions.push('Review Comments');
     actions.push('Comments Overview');
   }
   actions.push('Open in Gerrit');
@@ -838,11 +807,25 @@ async function showCompletionActions(
     msg, ...actions
   );
 
-  if (result === 'Review Comments') {
-    await browseDrafts(
-      drafts, gerritRepo, changeNumber
+  if (result === 'Comments Overview') {
+    // Warm the comments cache under the full
+    // changeID key so updatePanel can skip the
+    // API call.
+    const change = await GerritChange.getChangeOnce(
+      changeNumber,
+      [
+        GerritAPIWith.ALL_REVISIONS,
+        GerritAPIWith.ALL_FILES,
+      ]
     );
-  } else if (result === 'Comments Overview') {
+    if (change) {
+      const sub =
+        await GerritChange.getAllComments(
+          change.changeID
+        );
+      await sub.getValue(true);
+    }
+
     await showCommentsOverview(
       changeNumber, gerritRepo
     );
@@ -901,12 +884,6 @@ async function bestEffortMcpEnable(
     // Best-effort; --approve-mcps flag on the
     // agent invocation handles this at runtime.
   }
-}
-
-function isUnknownArray(
-  val: unknown
-): val is readonly unknown[] {
-  return Array.isArray(val);
 }
 
 function cleanupTempFile(filePath: string): void {

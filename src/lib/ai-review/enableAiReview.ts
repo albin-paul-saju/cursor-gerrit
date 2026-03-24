@@ -1,29 +1,18 @@
-import {
-  window,
-  workspace,
-  ExtensionContext,
-} from 'vscode';
+import { getGerritURLFromReviewFile } from '../credentials/enterCredentials';
+import { getGitReviewFileCached } from '../credentials/gitReviewFile';
+import { GerritSecrets } from '../credentials/secrets';
+import { tryExecAsync } from '../git/gitCLI';
+import { getGerritRepo } from '../gerrit/gerrit';
+import { writeMcpConfig, GerritCredentials } from '../mcp/mcpManager';
+import { log } from '../util/log';
 import { getConfiguration } from '../vscode/config';
-import { selectAiModel } from './modelSelector';
 import {
   runPreflight,
   buildMcpEnableCommand,
   AgentCommand,
 } from './preflight';
-import {
-  writeMcpConfig,
-  GerritCredentials,
-} from '../mcp/mcpManager';
-import {
-  getGerritURLFromReviewFile,
-} from '../credentials/enterCredentials';
-import {
-  getGitReviewFileCached,
-} from '../credentials/gitReviewFile';
-import { GerritSecrets } from '../credentials/secrets';
-import { getGerritRepo } from '../gerrit/gerrit';
-import { tryExecAsync } from '../git/gitCLI';
-import { log } from '../util/log';
+import { selectAiModel } from './modelSelector';
+import { window, workspace, ExtensionContext } from 'vscode';
 
 type CheckoutBehavior = 'ask' | 'always' | 'never';
 
